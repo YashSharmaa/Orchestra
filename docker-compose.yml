@@ -1,0 +1,83 @@
+# Orchestra © 2025
+# Author: Orchestra Team
+# License: Apache-2.0
+# Description: Docker Compose configuration for development
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: orchestra
+      POSTGRES_PASSWORD: orchestra_dev
+      POSTGRES_DB: orchestra
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U orchestra']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      DATABASE_TYPE: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: orchestra
+      DATABASE_USER: orchestra
+      DATABASE_PASSWORD: orchestra_dev
+      REDIS_ENABLED: 'true'
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: development_secret_key_change_in_production
+      ENCRYPTION_KEY: development_encryption_key_32_chars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app/packages/backend
+      - backend_node_modules:/app/packages/backend/node_modules
+    command: npm run dev --workspace=packages/backend
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_URL: http://localhost:3000
+    volumes:
+      - ./packages/frontend:/app/packages/frontend
+      - frontend_node_modules:/app/packages/frontend/node_modules
+    command: npm run dev --workspace=packages/frontend
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_node_modules:
+  frontend_node_modules:
